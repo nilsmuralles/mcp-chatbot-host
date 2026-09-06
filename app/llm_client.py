@@ -23,4 +23,7 @@ def ask(prompt: str) -> str:
         max_tokens=MAX_TOKENS,
         messages=[{"role": "user", "content": prompt}],
     )
-    return response.content[0].text
+    block = response.content[0]
+    if block.type != "text":
+        raise ValueError(f"Expected a text block, got '{block.type}'")
+    return block.text
