@@ -23,7 +23,7 @@ async def main() -> None:
     git = MCPServerClient(
         name="git",
         command="mcp-server-git",
-        args=["--repository", str(WORKSPACE)],
+        args=[],
     )
     manager = MCPManager([filesystem, git])
 
@@ -33,7 +33,12 @@ async def main() -> None:
     print(f"Workspace: {WORKSPACE}")
     print("Chat con herramientas MCP — escribí 'salir' o Ctrl+C para terminar.\n")
 
-    session = AgentSession(manager)
+    system = (
+        f"El directorio de trabajo para las herramientas de filesystem y git es: "
+        f"{WORKSPACE}. Usalo como repo_path/path en cada tool call, salvo que el "
+        f"usuario pida explícitamente otra ubicación."
+    )
+    session = AgentSession(manager, system=system)
     try:
         while True:
             try:

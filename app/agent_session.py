@@ -9,8 +9,9 @@ from app.mcp_clients import MCPManager
 MAX_TOOL_ITERATIONS = 10
 
 class AgentSession:
-    def __init__(self, manager: MCPManager) -> None:
+    def __init__(self, manager: MCPManager, system: str | None = None) -> None:
         self.manager = manager
+        self.system = system
         self.messages: list[dict] = []
 
     async def send(self, prompt: str) -> str:
@@ -22,6 +23,7 @@ class AgentSession:
             response = get_client().messages.create(
                 model=model,
                 max_tokens=MAX_TOKENS,
+                system=self.system or "",
                 messages=cast(list[MessageParam], self.messages),
                 tools=cast(list[ToolParam], tools),
             )
