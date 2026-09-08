@@ -1,4 +1,6 @@
 import { useState } from "react"
+import Markdown from "react-markdown"
+import remarkGfm from "remark-gfm"
 
 import {
   MessageScroller,
@@ -99,7 +101,15 @@ export default function App() {
                   <Message align={message.role === "user" ? "end" : "start"}>
                     <MessageContent>
                       <Bubble>
-                        <BubbleContent>{message.text}</BubbleContent>
+                        <BubbleContent>
+                          {message.role === "assistant" ? (
+                            <div className="prose prose-sm prose-invert max-w-none">
+                              <Markdown remarkPlugins={[remarkGfm]}>{message.text}</Markdown>
+                            </div>
+                          ) : (
+                            message.text
+                          )}
+                        </BubbleContent>
                       </Bubble>
                     </MessageContent>
                   </Message>
