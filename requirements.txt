@@ -1,4 +1,6 @@
 anthropic>=0.40.0
 python-dotenv>=1.0.1
-mcp>=1.2.0
+mcp>=1.2.0,<2
 mcp-server-git
+fastapi
+uvicorn[standard]
