@@ -3,17 +3,20 @@ import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 from app.agent_session import AgentSession
 from app.mcp_clients import MCPManager, MCPServerClient
+from app.mcp_config import ConnectorEntry, build_client, load_config, save_config
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 WORKSPACE = REPO_ROOT / "workspace"
 DEFAULT_DESIGN_SYSTEM_SERVER_PATH = (
     REPO_ROOT.parent / "mcp-design-system-server" / "app" / "server.py"
 )
+
+CORE_SERVER_NAMES = {"filesystem", "git", "design-system"}
 
 SYSTEM_PROMPT = (
     f"El directorio de trabajo para las herramientas de filesystem y git es: "
@@ -39,13 +42,22 @@ async def lifespan(app: FastAPI):
         name="design-system", command=sys.executable, args=[design_system_server_path]
     )
     manager = MCPManager([filesystem, git, design_system])
-
     await manager.connect_all()
+
+    connector_entries: dict[str, ConnectorEntry] = {}
+    for entry in load_config():
+        client = build_client(entry)
+        await manager.add_client(client)
+        connector_entries[entry["name"]] = entry
+
+    app.state.manager = manager
+    app.state.connector_entries = connector_entries
     app.state.session = AgentSession(manager, system=SYSTEM_PROMPT)
     try:
         yield
     finally:
         await manager.close_all()
+
 
 app = FastAPI(lifespan=lifespan)
 
@@ -59,3 +71,51 @@ class ChatResponse(BaseModel):
 async def chat(request: ChatRequest) -> ChatResponse:
     reply = await app.state.session.send(request.message)
     return ChatResponse(reply=reply)
+
+class ConnectorIn(BaseModel):
+    name: str
+    transport: str  # "stdio" | "http"
+    command: str | None = None
+    args: list[str] = []
+    cwd: str | None = None
+    env: dict[str, str] | None = None
+    url: str | None = None
+
+@app.get("/api/connectors")
+def list_connectors() -> list[dict]:
+    return [
+        {"name": name, "transport": entry["transport"]}
+        for name, entry in app.state.connector_entries.items()
+    ]
+
+@app.post("/api/connectors")
+async def add_connector(connector: ConnectorIn) -> dict:
+    if connector.name in CORE_SERVER_NAMES:
+        raise HTTPException(400, f"'{connector.name}' is a core server, not a connector")
+    if connector.name in app.state.connector_entries:
+        raise HTTPException(400, f"A connector named '{connector.name}' already exists")
+
+    entry: ConnectorEntry = connector.model_dump(exclude_none=True)
+    client = build_client(entry)
+    try:
+        await app.state.manager.add_client(client)
+    except Exception as exc:
+        attempted = (
+            f"command={entry.get('command')!r} args={entry.get('args')!r}"
+            if entry["transport"] == "stdio"
+            else f"url={entry.get('url')!r}"
+        )
+        raise HTTPException(400, f"Could not connect ({attempted}): {exc}") from exc
+
+    app.state.connector_entries[connector.name] = entry
+    save_config(list(app.state.connector_entries.values()))
+    return {"name": connector.name, "transport": connector.transport}
+
+@app.delete("/api/connectors/{name}")
+async def delete_connector(name: str) -> dict:
+    if name not in app.state.connector_entries:
+        raise HTTPException(404, f"No connector named '{name}'")
+    await app.state.manager.remove_client(name)
+    del app.state.connector_entries[name]
+    save_config(list(app.state.connector_entries.values()))
+    return {"deleted": name}

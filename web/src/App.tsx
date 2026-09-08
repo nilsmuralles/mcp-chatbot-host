@@ -12,6 +12,7 @@ import { Message, MessageContent } from "@/components/ui/message"
 import { Bubble, BubbleContent } from "@/components/ui/bubble"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
+import Connectors from "@/Connectors"
 
 type ChatMessage = {
   id: string
@@ -33,6 +34,7 @@ async function sendChatMessage(message: string): Promise<string> {
 }
 
 export default function App() {
+  const [view, setView] = useState<"chat" | "connectors">("chat")
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState("")
   const [isSending, setIsSending] = useState(false)
@@ -68,8 +70,22 @@ export default function App() {
 
   return (
     <div className="mx-auto flex h-svh w-full max-w-2xl flex-col p-4">
-      <h1 className="mb-4 text-lg font-semibold">Design System Assistant</h1>
+      <div className="mb-4 flex items-center justify-between">
+        <h1 className="text-lg font-semibold">Design System Assistant</h1>
+        <div className="flex gap-2">
+          <Button variant={view === "chat" ? "default" : "outline"} size="sm" onClick={() => setView("chat")}>
+            Chat
+          </Button>
+          <Button variant={view === "connectors" ? "default" : "outline"} size="sm" onClick={() => setView("connectors")}>
+            Connectors
+          </Button>
+        </div>
+      </div>
 
+      {view === "connectors" ? (
+        <Connectors />
+      ) : (
+        <>
       <MessageScrollerProvider autoScroll>
         <MessageScroller className="flex-1 rounded-lg border">
           <MessageScrollerViewport>
@@ -122,6 +138,8 @@ export default function App() {
           Enviar
         </Button>
       </div>
+        </>
+      )}
     </div>
   )
 }
