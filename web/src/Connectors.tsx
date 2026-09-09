@@ -16,6 +16,12 @@ async function fetchConnectors(): Promise<Connector[]> {
   return response.json()
 }
 
+// Saca espacios y puntuación colgante típica de copiar/pegar (ej. el "." con el que
+// termina una oración) que rompe rutas y URLs sin que se note a simple vista.
+function cleanPastedValue(value: string): string {
+  return value.trim().replace(/[.,;]+$/, "")
+}
+
 export default function Connectors() {
   const [connectors, setConnectors] = useState<Connector[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -66,12 +72,12 @@ export default function Connectors() {
           ? {
               name: name.trim(),
               transport,
-              command: command.trim(),
-              args: args.split(",").map((a) => a.trim()).filter(Boolean),
-              cwd: cwd.trim() || undefined,
+              command: cleanPastedValue(command),
+              args: args.split(",").map((a) => cleanPastedValue(a)).filter(Boolean),
+              cwd: cwd.trim() ? cleanPastedValue(cwd) : undefined,
               env: parseEnv(env),
             }
-          : { name: name.trim(), transport, url: url.trim() }
+          : { name: name.trim(), transport, url: cleanPastedValue(url) }
 
       const response = await fetch("/api/connectors", {
         method: "POST",

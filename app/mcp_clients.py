@@ -1,5 +1,6 @@
 import asyncio
 import json
+from contextlib import asynccontextmanager
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
@@ -88,8 +89,10 @@ class RemoteMCPServerClient(_BaseMCPClient):
         super().__init__(name)
         self._url = url
 
-    def _open_transport(self):
-        return streamablehttp_client(self._url)
+    @asynccontextmanager
+    async def _open_transport(self):
+        async with streamablehttp_client(self._url) as (read, write, _get_session_id):
+            yield read, write
 
 class MCPManager:
     def __init__(self, clients: list[_BaseMCPClient]) -> None:

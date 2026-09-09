@@ -15,6 +15,7 @@ import { Bubble, BubbleContent } from "@/components/ui/bubble"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import Connectors from "@/Connectors"
+import Logs from "@/Logs"
 
 type ChatMessage = {
   id: string
@@ -36,7 +37,7 @@ async function sendChatMessage(message: string): Promise<string> {
 }
 
 export default function App() {
-  const [view, setView] = useState<"chat" | "connectors">("chat")
+  const [view, setView] = useState<"chat" | "connectors" | "logs">("chat")
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState("")
   const [isSending, setIsSending] = useState(false)
@@ -81,11 +82,16 @@ export default function App() {
           <Button variant={view === "connectors" ? "default" : "outline"} size="sm" onClick={() => setView("connectors")}>
             Connectors
           </Button>
+          <Button variant={view === "logs" ? "default" : "outline"} size="sm" onClick={() => setView("logs")}>
+            Logs
+          </Button>
         </div>
       </div>
 
       {view === "connectors" ? (
         <Connectors />
+      ) : view === "logs" ? (
+        <Logs />
       ) : (
         <>
       <MessageScrollerProvider autoScroll>
@@ -100,17 +106,19 @@ export default function App() {
                 >
                   <Message align={message.role === "user" ? "end" : "start"}>
                     <MessageContent>
-                      <Bubble>
-                        <BubbleContent>
-                          {message.role === "assistant" ? (
-                            <div className="prose prose-sm prose-invert max-w-none">
+                      {message.role === "assistant" ? (
+                        <Bubble variant="outline">
+                          <BubbleContent>
+                            <div className="prose prose-sm max-w-none">
                               <Markdown remarkPlugins={[remarkGfm]}>{message.text}</Markdown>
                             </div>
-                          ) : (
-                            message.text
-                          )}
-                        </BubbleContent>
-                      </Bubble>
+                          </BubbleContent>
+                        </Bubble>
+                      ) : (
+                        <Bubble className="*:data-[slot=bubble-content]:!bg-blue-600 *:data-[slot=bubble-content]:!text-white">
+                          <BubbleContent>{message.text}</BubbleContent>
+                        </Bubble>
+                      )}
                     </MessageContent>
                   </Message>
                 </MessageScrollerItem>
@@ -118,7 +126,7 @@ export default function App() {
               {isSending && (
                 <Message align="start">
                   <MessageContent>
-                    <Bubble>
+                    <Bubble variant="outline">
                       <BubbleContent className="shimmer">Pensando…</BubbleContent>
                     </Bubble>
                   </MessageContent>

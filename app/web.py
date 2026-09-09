@@ -1,3 +1,4 @@
+import json
 import os
 import sys
 from contextlib import asynccontextmanager
@@ -7,6 +8,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 from app.agent_session import AgentSession
+from app.interaction_log import LOGS_DIR
 from app.mcp_clients import MCPManager, MCPServerClient
 from app.mcp_config import ConnectorEntry, build_client, load_config, save_config
 
@@ -21,7 +23,12 @@ CORE_SERVER_NAMES = {"filesystem", "git", "design-system"}
 SYSTEM_PROMPT = (
     f"El directorio de trabajo para las herramientas de filesystem y git es: "
     f"{WORKSPACE}. Usalo como repo_path/path en cada tool call, salvo que el "
-    f"usuario pida explícitamente otra ubicación."
+    f"usuario pida explícitamente otra ubicación.\n\n"
+    f"Para cualquier pregunta sobre colores, tipografía, espaciado, componentes de UI, "
+    f"accesibilidad de una interfaz, o generación de código de un componente, usá "
+    f"siempre las tools del servidor design-system en vez de responder con conocimiento "
+    f"genérico — son la fuente de verdad del design system real del usuario, no una "
+    f"convención genérica de otro framework."
 )
 
 @asynccontextmanager
@@ -99,13 +106,19 @@ async def add_connector(connector: ConnectorIn) -> dict:
     client = build_client(entry)
     try:
         await app.state.manager.add_client(client)
-    except Exception as exc:
+    except BaseException as exc:
         attempted = (
             f"command={entry.get('command')!r} args={entry.get('args')!r}"
             if entry["transport"] == "stdio"
             else f"url={entry.get('url')!r}"
         )
-        raise HTTPException(400, f"Could not connect ({attempted}): {exc}") from exc
+        # anyio agrupa el error real dentro de un ExceptionGroup cuyo str() es solo
+        # "unhandled errors in a TaskGroup" — sin desenvolverlo, el mensaje no dice nada
+        # útil para diagnosticar (nos pasó de verdad con el conector remoto).
+        real_exc = exc
+        while isinstance(real_exc, BaseExceptionGroup) and len(real_exc.exceptions) == 1:
+            real_exc = real_exc.exceptions[0]
+        raise HTTPException(400, f"Could not connect ({attempted}): {real_exc!r}") from exc
 
     app.state.connector_entries[connector.name] = entry
     save_config(list(app.state.connector_entries.values()))
@@ -119,3 +132,19 @@ async def delete_connector(name: str) -> dict:
     del app.state.connector_entries[name]
     save_config(list(app.state.connector_entries.values()))
     return {"deleted": name}
+
+@app.get("/api/logs")
+def get_logs() -> list[dict]:
+    entries = []
+    if LOGS_DIR.exists():
+        for path in sorted(LOGS_DIR.glob("*.jsonl")):
+            with path.open(encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    entry = json.loads(line)
+                    entry["session"] = path.stem
+                    entries.append(entry)
+    entries.sort(key=lambda e: e["timestamp"])
+    return entries
