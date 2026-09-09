@@ -12,18 +12,25 @@ import {
 } from "@/components/ui/message-scroller"
 import { Message, MessageContent } from "@/components/ui/message"
 import { Bubble, BubbleContent } from "@/components/ui/bubble"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import Connectors from "@/Connectors"
 import Logs from "@/Logs"
 
+type ToolCall = {
+  server: string
+  tool: string
+}
+
 type ChatMessage = {
   id: string
   role: "user" | "assistant"
   text: string
+  toolCalls?: ToolCall[]
 }
 
-async function sendChatMessage(message: string): Promise<string> {
+async function sendChatMessage(message: string): Promise<{ reply: string; toolCalls: ToolCall[] }> {
   const response = await fetch("/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -33,7 +40,7 @@ async function sendChatMessage(message: string): Promise<string> {
     throw new Error(`Request failed: ${response.status}`)
   }
   const data = await response.json()
-  return data.reply as string
+  return { reply: data.reply as string, toolCalls: (data.tool_calls ?? []) as ToolCall[] }
 }
 
 export default function App() {
@@ -52,10 +59,10 @@ export default function App() {
     setIsSending(true)
 
     try {
-      const reply = await sendChatMessage(text)
+      const { reply, toolCalls } = await sendChatMessage(text)
       setMessages((prev) => [
         ...prev,
-        { id: crypto.randomUUID(), role: "assistant", text: reply },
+        { id: crypto.randomUUID(), role: "assistant", text: reply, toolCalls },
       ])
     } catch {
       setMessages((prev) => [
@@ -107,13 +114,24 @@ export default function App() {
                   <Message align={message.role === "user" ? "end" : "start"}>
                     <MessageContent>
                       {message.role === "assistant" ? (
-                        <Bubble variant="outline">
-                          <BubbleContent>
-                            <div className="prose prose-sm max-w-none">
-                              <Markdown remarkPlugins={[remarkGfm]}>{message.text}</Markdown>
+                        <div className="flex flex-col gap-1">
+                          {message.toolCalls && message.toolCalls.length > 0 && (
+                            <div className="flex flex-wrap gap-1">
+                              {message.toolCalls.map((call, i) => (
+                                <Badge key={i} variant="secondary">
+                                  {call.server} · {call.tool}
+                                </Badge>
+                              ))}
                             </div>
-                          </BubbleContent>
-                        </Bubble>
+                          )}
+                          <Bubble variant="outline">
+                            <BubbleContent>
+                              <div className="prose prose-sm max-w-none">
+                                <Markdown remarkPlugins={[remarkGfm]}>{message.text}</Markdown>
+                              </div>
+                            </BubbleContent>
+                          </Bubble>
+                        </div>
                       ) : (
                         <Bubble className="*:data-[slot=bubble-content]:!bg-blue-600 *:data-[slot=bubble-content]:!text-white">
                           <BubbleContent>{message.text}</BubbleContent>

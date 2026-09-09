@@ -13,8 +13,10 @@ class AgentSession:
         self.manager = manager
         self.system = system
         self.messages: list[dict] = []
+        self.last_tool_calls: list[dict] = []
 
     async def send(self, prompt: str) -> str:
+        self.last_tool_calls = []
         self.messages.append({"role": "user", "content": prompt})
         model = os.environ.get("ANTHROPIC_MODEL", DEFAULT_MODEL)
         tools = self.manager.anthropic_tools()
@@ -38,6 +40,8 @@ class AgentSession:
             for block in response.content:
                 if block.type != "tool_use":
                     continue
+                server, tool = block.name.split("__", 1)
+                self.last_tool_calls.append({"server": server, "tool": tool})
                 result_text = await self.manager.call(block.name, block.input)
                 tool_results.append(
                     {

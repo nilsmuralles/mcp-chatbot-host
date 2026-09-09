@@ -73,11 +73,12 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     reply: str
+    tool_calls: list[dict] = []
 
 @app.post("/api/chat")
 async def chat(request: ChatRequest) -> ChatResponse:
     reply = await app.state.session.send(request.message)
-    return ChatResponse(reply=reply)
+    return ChatResponse(reply=reply, tool_calls=app.state.session.last_tool_calls)
 
 class ConnectorIn(BaseModel):
     name: str
